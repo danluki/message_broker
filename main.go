@@ -55,6 +55,12 @@ func (b *qbroker) put(ctx context.Context, name string, value string) {
 		queue.waiters[0] = nil	
 		queue.waiters = queue.waiters[1:]
 
+		/*
+			Проверка на активность вейтера, нужна, чтобы избежать потерь сообщения
+			в случае, если вейтер, ушел в cancel, и больше не ждёт сообщений, а мы
+			пишем ему в канал, после чего он не читая это сообщение помечается не активным, и 
+			будет удалён.
+		*/
 		if waiter.active {
 			waiter.active = false
 			waiter.recv <- msgData(value)
