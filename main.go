@@ -110,12 +110,20 @@ func (b *qbroker) get(ctx context.Context, queueName string, timeout time.Durati
 		case msg := <-waiter.recv:
 			return string(msg), true
 		case <-ctx.Done():
-			b.cancelWaiter(queueName, waiter)
-			return "", false
+			if b.cancelWaiter(queueName, waiter) {
+				return "", false
+			}
+
+			msg := <-waiter.recv
+			return string(msg), true
 	}
 }
 
-func (b *qbroker) cancelWaiter(queueName string, waiter *waiter) {
+/*
+	Возвращает bool для того, чтобы в случае, когда PUT уже отметил waiter как неакитвный,
+	а GET в это время ушёл в таймаут, сообщений не терялось.
+*/
+func (b *qbroker) cancelWaiter(queueName string, waiter *waiter) bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	
@@ -125,7 +133,12 @@ func (b *qbroker) cancelWaiter(queueName string, waiter *waiter) {
 		минус что при многих GET завершившихся по таймауту без PUT, поиск нового вейтера
 		будет занимать O(n)
 	*/
-	waiter.active = false
+	if waiter.active {
+		waiter.active = false
+		return true
+	}
+
+	return false
 }
 
 func main() {
